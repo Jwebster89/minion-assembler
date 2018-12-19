@@ -9,7 +9,7 @@
 
 ########### 	~Experiment details~     ########
 
-experiment_name=281118_Pantoea_Astars
+experiment_name= #Type experiment name here
 directory=~/Documents/Minion/$experiment_name
 
 #################################################
@@ -124,9 +124,9 @@ if $unicyler_hybrid_assembly ; then
 				f=$(basename $sample)
 				location=$(sed -n ${COUNTER}p $directory/sample_names.txt)
 				unicycler -1 $directory/samples/$location/reads/*R1_001.fastq.gz -2 $directory/samples/$location/reads/*R2_001.fastq.gz -t $threads  \
-				-l $directory/samples/$location/reads/trimmed.BC$(printf %02d $COUNTER).fastq -o $directory/samples/$location/unicycler_hybrid
-				cp $directory/samples/$location/trimmed_unicycler_hybrid/assembly.fasta $directory/samples/$location/trimmed_unicycler_hybrid/${location}_hybrid.fasta
-				assembly-stats $directory/samples/$location/trimmed_unicycler_hybrid/${location}_hybrid_trimmed.fasta > $directory/samples/$location/trimmed_unicycler_hybrid/assembly_stats_${location}.txt
+				-l $directory/samples/$location/reads/BC$(printf %02d $COUNTER).fastq -o $directory/samples/$location/unicycler_hybrid
+				cp $directory/samples/$location/unicycler_hybrid/assembly.fasta $directory/samples/$location/unicycler_hybrid/${location}_hybrid.fasta
+				assembly-stats $directory/samples/$location/unicycler_hybrid/${location}_hybrid_notrim.fasta > $directory/samples/$location/unicycler_hybrid/assembly_stats_${location}.txt
 
 				COUNTER=$[$COUNTER +1]
 			done
@@ -198,12 +198,25 @@ if $nanopolish_minasm; then
 			# $f not needed here, just generating it incase I want it later. This just uses number of barcodes to determine how many assemblies to produce.
 			f=$(basename $trimmed_sample)
 			location=$(sed -n ${COUNTER}p $directory/sample_names.txt)
-			#nanopolish index -d $directory/raw_files/fast5/pass $directory/samples/$location/reads/trimmed.BC$(printf %02d $COUNTER).fastq			
-			#bwa index $directory/samples/$location/miniasm_longread/${location}_miniasm_trimmed.fasta
+			nanopolish index -d $directory/raw_files/fast5/pass $directory/samples/$location/reads/trimmed.BC$(printf %02d $COUNTER).fastq			
+			bwa index $directory/samples/$location/miniasm_longread/${location}_miniasm_trimmed.fasta
+			mkdir $directory/samples/$location/nanopolish_trimmed/
+			bwa mem -x ont2d -t $threads $directory/samples/$location/miniasm_longread/${location}_miniasm_trimmed.fasta $directory/samples/$location/reads/trimmed.BC$(printf %02d $COUNTER).fastq | samtools sort -o $directory/samples/$location/nanopolish_trimmed/reads.sorted.${location}.BAM
+			samtools index $directory/samples/$location/nanopolish_trimmed/reads.sorted.${location}.BAM
+			nanopolish variants --consensus $directory/samples/$location/nanopolish_trimmed/nano.${location}.fasta -r $directory/samples/$location/reads/trimmed.BC$(printf %02d $COUNTER).fastq -b $directory/samples/$location/nanopolish_trimmed/reads.sorted.${location}.BAM -g $directory/samples/$location/miniasm_longread/${location}_miniasm_trimmed.fasta -q dcm,dam --min-candidate-frequency 0.1
+			COUNTER=$[$COUNTER +1]
+		done
+	else
+		for sample in $directory/barcodes/BC*; do
+			# $f not needed here, just generating it incase I want it later. This just uses number of barcodes to determine how many assemblies to produce.
+			f=$(basename $trimmed_sample)
+			location=$(sed -n ${COUNTER}p $directory/sample_names.txt)
+			nanopolish index -d $directory/raw_files/fast5/pass $directory/samples/$location/reads/BC$(printf %02d $COUNTER).fastq			
+			bwa index $directory/samples/$location/miniasm_longread/${location}_miniasm.fasta
 			mkdir $directory/samples/$location/nanopolish/
-			#bwa mem -x ont2d -t $threads $directory/samples/$location/miniasm_longread/${location}_miniasm_trimmed.fasta $directory/samples/$location/reads/trimmed.BC$(printf %02d $COUNTER).fastq | samtools sort -o $directory/samples/$location/nanopolish/reads.sorted.${location}.BAM
-			#samtools index $directory/samples/$location/nanopolish/reads.sorted.${location}.BAM
-			nanopolish variants --consensus $directory/samples/$location/nanopolish/nano.${location}.fasta -r $directory/samples/$location/reads/trimmed.BC$(printf %02d $COUNTER).fastq -b $directory/samples/$location/nanopolish/reads.sorted.${location}.BAM -g $directory/samples/$location/miniasm_longread/${location}_miniasm_trimmed.fasta -q dcm,dam --min-candidate-frequency 0.1
+			bwa mem -x ont2d -t $threads $directory/samples/$location/miniasm_longread/${location}_miniasm_trimmed.fasta $directory/samples/$location/reads/trimmed.BC$(printf %02d $COUNTER).fastq | samtools sort -o $directory/samples/$location/nanopolish/reads.sorted.${location}.BAM
+			samtools index $directory/samples/$location/nanopolish/reads.sorted.${location}.BAM
+			nanopolish variants --consensus $directory/samples/$location/nanopolish/nano.${location}.fasta -r $directory/samples/$location/reads/BC$(printf %02d $COUNTER).fastq -b $directory/samples/$location/nanopolish/reads.sorted.${location}.BAM -g $directory/samples/$location/miniasm_longread/${location}_miniasm.fasta -q dcm,dam --min-candidate-frequency 0.1
 			COUNTER=$[$COUNTER +1]
 		done
 	fi
@@ -215,7 +228,7 @@ if $indel_checking; then
 		mv -f ~/bin/ideel/genomes/* ~/bin/ideel/completed_genomes/
 		cp $directory/samples/$location/miniasm_longread/${location}_miniasm.fasta ~/bin/ideel/genomes/${location}_miniasm.fa
 		cp $directory/samples/$location/trimmed_unicycler_hybrid/${location}_hybrid_trimmed.fasta ~/bin/ideel/genomes/${location}_hybrid_trimmed.fa
-		cp $directory/samples/$location/trimmed_unicycler_hybrid/${location}_hybrid.fasta ~/bin/ideel/genomes/${location}_hybrid.fa
+		cp $directory/samples/$location/unicycler_hybrid/${location}_hybrid.fasta ~/bin/ideel/genomes/${location}_hybrid.fa
 		COUNTER=$[$COUNTER +1]
 	done
 	~/bin/ideel/snakemake
@@ -230,12 +243,12 @@ if $annotate; then
 			f=$(basename $trimmed_sample)
 			location=$(sed -n ${COUNTER}p $directory/sample_names.txt)
 			prokka --outdir $directory/analyses/annotations/$location --force --prefix trimmed.$location --cpus $threads $directory/samples/$location/trimmed_unicycler_hybrid/assembly.fasta
-			cp $directory/analyses/annotations/$location/*gff $directory/analyses/annotations/gffs/
+			cp $directory/analyses/annotations/$location/*gff $directory/analyses/trimmedassembly_annotations/gffs/
 			COUNTER=$[$COUNTER +1]
 		done
 	else
 		COUNTER=1
-		for trimmed_sample in $directory/barcodes/BC*; do
+		for sample in $directory/barcodes/BC*; do
 			# $f not needed here, just generating it incase I want it later. This just uses number of barcodes to determine how many annotations to produce.
 			f=$(basename $trimmed_sample)
 			location=$(sed -n ${COUNTER}p $directory/sample_names.txt)
@@ -248,7 +261,11 @@ if $annotate; then
 fi
 
 if $pangenome; then
-	roary -e --maft -p $threads -f $directory/analyses/annotations/gffs/roary $directory/analyses/annotations/gffs/*.gff
+	if $trimmed; then
+		roary -e --maft -p $threads -f $directory/analyses/annotations/gffs/roary $directory/analyses/trimmedassembly_annotations/gffs/*.gff
+	else
+		roary -e --maft -p $threads -f $directory/analyses/annotations/gffs/roary $directory/analyses/annotations/gffs/*.gff
+	fi
 fi
 
 if $auto_shutdown; then
