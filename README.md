@@ -2,8 +2,8 @@
 Bash script to automate assembly of bacterial genomes
 
 Script is run in bash with ./Minion_assembly.sh
+
 All changes are made to variables within the script in order to select outputs, variables listed below.
-Initial runs
 
 experiment_name=Experiment_name_here
 directory=~/Documents/Minion/$experiment_name
